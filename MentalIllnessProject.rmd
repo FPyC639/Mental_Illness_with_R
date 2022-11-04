@@ -1,0 +1,129 @@
+---
+title: "Mental Health Data Analysis"
+author: "Jose M. Serra Jr."
+date: "May 5th 2021" 
+output:
+  md_document:
+    variant: markdown_github
+    toc: true
+    toc_depth: 5
+    fig_width: 5
+    fig_height: 5
+---
+# Mental Health and Empathy Stats and Predictions
+The data is avalible <a href="https://www.rcpsych.ac.uk/docs/default-source/improving-care/ccqi/national-clinical-audits/ncaad-documents/spotlight-1/ncaad-spotlight-audit-trust-and-service-data-table.xls">here</a> This is also shown below.
+Using the openxlsx library I will use that to extract data from an Microsoft Excel spreadsheet which is the format the data is in, and then I will story that data in a data.frame.
+```{r}
+library(openxlsx)
+data <- file.path("D:/Datasets/ncaad-spotlight-audit-trust-and-service-data-table.xlsx")
+df1 <- openxlsx::read.xlsx(data)
+```
+
+## Research Questions
+Some of the research questions that I will be posing is the following:
+ <ul>
+  <li>Statistical Correlation Amoung Variables</li>
+  <li>Graphical Representations of the data</li>
+</ul> 
+To formulate it better I want to see if there is a correlation between the groups, and different mental health variants, Male, Sex, Sexual Orientation and so on have an impact in the empathy percentage. All the data columns that are used from the original dataset are percentages, which are then fed into a machine learning algorithm.
+My overall contributions will be showing visulizations and the various tests I plan to use to boost the statistical analysis, like the T-Test, and so on.
+
+```{r message=FALSE}
+library(tidyverse)
+```
+# Variable Extraction
+<p style="text-indent: 40 px"> Here I extracted a few columns that are important for the following predictor variable. I have provided the full list of variables that are in the data.frame </p>
+```{r results= 'hide'}
+for (val in names(df1))
+  cat(val, sep= "\n")
+```
+
+Here I begin to extract the columns from the data.frame that will be used in each category such as age, gender, race, and mental illness. From there I as well I pulled out the predictor variable.
+```{r}
+age <- df1[c(9:14)]
+gender <- df1[c(15:18)]
+race <- df1[c(19:25)]
+mental_illness <- df1[c(54:88)]
+predictor <- df1[c(132)]
+```
+
+# Data Cleanup
+
+There was a problem with data having both percentages, and part/whole so the percentages were extracted from the data.frames that were extracted from variable extraction.
+
+```{r}
+transformation_1 <- function(y) {result <- as.data.frame(sapply(y, function(x) as.numeric(sub("%.*", "", x))))
+return(result)}
+```
+
+
+
+```{r warning=FALSE}
+age <- transformation_1(age)
+head(age)
+names(age) <- c("EighteenthruTwentyFive","TwentySixThruThirty","ThirtySixThruFortyFive","FortySixThruFiftyFive","FiftySixThruSixtyFive","gtSixtyFive")
+```
+
+
+
+```{r warning=FALSE}
+gender <- transformation_1(gender)
+head(gender)
+names(gender) <- c("Male","Female","Nonbinary.Other","Unknown.not.documented")
+```
+
+```{r warning=FALSE}
+mental_illness <- transformation_1(mental_illness)
+head(mental_illness,1)
+names(mental_illness) <- c("Behaviouralandemotionaldisability","Progressiveconditionsandphysicalhealth","Mobilityandgrossmotordisability", "Memoryabilitytolearnconcentrateorunderstand","Personalselfcareandcontinence", "Hearingdisability","Sightdisability","Manualdexterity","Perceptionofphysicaldanger","Speechdisability","Other", "Bipolarproblem","BDDproblem", "Depressionproblem", "Eatingdisorderproblem","GAD","MixedaandDproblem","OCDproblem", "PanicDisorderproblem","PDproblem","PTSDproblem", "Specificphobiaproblem","Socialphobproblem", "OtherAnxproblem", "Otherdiagproblem","Unknownproblem", "DepressiveepisodeF32", "RecurrentdepressivedisorderF33persistentmoodaffectivedisordersF34othermoodaffectivedisordersF38F39","Phobic_anxiety_disorders__F40___other_anxiety_disorders__F41___obsessive_compulsive_disorder_F42_","Reaction_to_severe_stress__and_adjustment_disorders__F43_","Disorders_of_adult_personality_and_behaviour__F60_69_","Behavioural_syndromes_associated_with_physiological_disturbances_and_physical_factors__F50___F59__","Mental_and_behavioural_disorders_due_to_psychoactive_substance_use__F10_F19__","Bipolar_disorder__F31_","Other_diagnoses_not_listed_above_")
+
+```
+
+```{r warning=FALSE}
+predictor <- transformation_1(predictor)
+head(predictor)
+names(predictor) <- "Experience_empathy_Agree"
+```
+
+# After Data Clean Up
+
+Merge data into one single data.frame to perform statistics, and regression analysis.
+
+```{r warning=FALSE}
+Prediction.df <- drop_na(dplyr::bind_cols(age,gender,mental_illness,predictor))
+head(Prediction.df, 1)
+```
+
+# Shapiro-Wilk Test of Normality
+
+On each column the test was ran to gain an understanding of its normality vs skewness.
+
+```{r}
+blank=c()
+ptest1 <- lapply(Prediction.df, stats::shapiro.test)
+for (x in ptest1){
+  blank <-c(blank,x$p.value)
+}
+for (i in 1:length(blank))
+     print(paste(names(Prediction.df)[i],blank[i]))
+```
+# Histogram With KDE Curve
+In the following section I looped over my data set and produced Histograms, with KDE Curves
+```{r message=FALSE}
+library(ggplot2)
+plotter <- function(s) ggplot(Prediction.df, aes_string(s)) +
+        geom_histogram(aes(y = ..density..), colour = "black", fill = "white") +
+        stat_function(fun = dnorm, args = list(mean = mean(Prediction.df[,s], na.rm = T), 
+                                               sd = sd(Prediction.df[,s], na.rm = T))) +
+        xlab(s)
+lapply(X=names(Prediction.df),FUN=plotter)
+```
+
+# Linear Regression
+
+```{r}
+fit <- stats::lm(Experience_empathy_Agree~.,data = Prediction.df)
+summary(fit)
+```
+
+
